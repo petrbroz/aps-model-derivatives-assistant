@@ -1,0 +1,59 @@
+:root {
+    --sl-font-sans: ArtifaktElement;
+    --sl-font-mono: ArtifaktElement;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    width: 100vw;
+    height: 100vh;
+    display: grid;
+    grid-template-rows: 4em 1fr;
+    grid-template-columns: 20em 1fr 30em;
+    grid-template-areas:
+        "header header header"
+        "left center right";
+    font-family: ArtifaktElement;
+}
+
+input, button, textarea {
+    font-family: ArtifaktElement;
+    font-size: 1em;
+}
+
+#header {
+    grid-area: header;
+    display: flex;
+    flex-flow: row nowrap;
+    justify-content: space-between;
+    align-items: center;
+}
+
+#browser {
+    grid-area: left;
+    overflow-y: auto;
+}
+
+#preview {
+    position: relative;
+    grid-area: center;
+    overflow: hidden;
+}
+
+#chatbot {
+    grid-area: right;
+    overflow-y: auto;
+}
+
+#header > * {
+    height: 2em;
+    margin: 0 0.5em;
+}
+
+#header .title {
+    height: auto;
+    margin-right: auto;
+    font-weight: 500;
+    font-size: large;
+}
