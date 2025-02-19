@@ -26,6 +26,7 @@ Login with your Autodesk credentials, select one of your design files in ACC, an
 
 - [APS application](https://aps.autodesk.com/en/docs/oauth/v2/tutorials/create-app/) of the _Desktop, Mobile, Single-Page App_ type
 - [OpenAI API key](https://platform.openai.com/docs/quickstart/create-and-export-an-api-key)
+- [Python 3.x](https://www.python.org/downloads/)
 
 ### Setup
 

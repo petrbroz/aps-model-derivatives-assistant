@@ -1,9 +1,10 @@
 import os
 import json
 import sqlite3
+from langchain_community.utilities import SQLDatabase
 from aps import ModelDerivativesClient
 
-def parse_length(value):
+def _parse_length(value):
     units = {
         "m": 1,
         "cm": 0.01,
@@ -18,7 +19,7 @@ def parse_length(value):
     number, unit = value.split()
     return float(number) * units[unit]
 
-def parse_area(value):
+def _parse_area(value):
     units = {
         "m^2": 1,
         "cm^2": 0.0001,
@@ -32,7 +33,7 @@ def parse_area(value):
     number, unit = value.split()
     return float(number) * units[unit]
 
-def parse_volume(value):
+def _parse_volume(value):
     units = {
         "m^3": 1,
         "cm^3": 0.000001,
@@ -46,7 +47,7 @@ def parse_volume(value):
     number, unit = value.split()
     return float(number) * units[unit]
 
-def parse_angle(value):
+def _parse_angle(value):
     units = {
         "degrees": 1,
         "degree": 1,
@@ -62,28 +63,47 @@ def parse_angle(value):
 # Define the properties to extract from the model
 # (column name, column type, category name, property name, parsing function)
 PROPERTIES = [
-    ("width",       "REAL", "Dimensions",               "Width",                parse_length),
-    ("height",      "REAL", "Dimensions",               "Height",               parse_length),
-    ("length",      "REAL", "Dimensions",               "Length",               parse_length),
-    ("area",        "REAL", "Dimensions",               "Area",                 parse_area),
-    ("volume",      "REAL", "Dimensions",               "Volume",               parse_volume),
-    ("perimeter",   "REAL", "Dimensions",               "Perimeter",            parse_length),
-    ("slope",       "REAL", "Dimensions",               "Slope",                parse_angle),
-    ("thickness",   "REAL", "Dimensions",               "Thickness",            parse_length),
-    ("radius",      "REAL", "Dimensions",               "Radius",               parse_length),
+    ("width",       "REAL", "Dimensions",               "Width",                _parse_length),
+    ("height",      "REAL", "Dimensions",               "Height",               _parse_length),
+    ("length",      "REAL", "Dimensions",               "Length",               _parse_length),
+    ("area",        "REAL", "Dimensions",               "Area",                 _parse_area),
+    ("volume",      "REAL", "Dimensions",               "Volume",               _parse_volume),
+    ("perimeter",   "REAL", "Dimensions",               "Perimeter",            _parse_length),
+    ("slope",       "REAL", "Dimensions",               "Slope",                _parse_angle),
+    ("thickness",   "REAL", "Dimensions",               "Thickness",            _parse_length),
+    ("radius",      "REAL", "Dimensions",               "Radius",               _parse_length),
     ("level",       "TEXT", "Constraints",              "Level",                lambda x: x),
     ("material",    "TEXT", "Materials and Finishes",   "Structural Material",  lambda x: x),
 ]
 
-async def create_property_database(urn: str, propdb_path: str, access_token: str):
+async def setup(urn: str, access_token: str, cache_urn_dir: str) -> SQLDatabase:
+    propdb_path = os.path.join(cache_urn_dir, "props.sqlite3")
+    if os.path.exists(propdb_path):
+        return SQLDatabase.from_uri(f"sqlite:///{propdb_path}")
+
     model_derivative_client = ModelDerivativesClient(access_token)
 
-    views = await model_derivative_client.list_model_views(urn)
-    with open(os.path.dirname(propdb_path) + "/views.json", "w") as f: json.dump(views, f)
-    tree = await model_derivative_client.fetch_object_tree(urn, views[0]["guid"]) # Use the first view
-    with open(os.path.dirname(propdb_path) + "/tree.json", "w") as f: json.dump(tree, f)
-    props = await model_derivative_client.fetch_all_properties(urn, views[0]["guid"]) # Use the first view
-    with open(os.path.dirname(propdb_path) + "/props.json", "w") as f: json.dump(props, f)
+    views_path = os.path.join(cache_urn_dir, "views.json")
+    if not os.path.exists(views_path):
+        views = await model_derivative_client.list_model_views(urn)
+        with open(views_path, "w") as f: json.dump(views, f)
+    else:
+        with open(views_path, "r") as f: views = json.load(f)
+    view_guid = views[0]["guid"] # Use the first view
+
+    tree_path = os.path.join(cache_urn_dir, "tree.json")
+    if not os.path.exists(tree_path):
+        tree = await model_derivative_client.fetch_object_tree(urn, view_guid)
+        with open(tree_path, "w") as f: json.dump(tree, f)
+    else:
+        with open(tree_path, "r") as f: tree = json.load(f)
+
+    props_path = os.path.join(cache_urn_dir, "props.json")
+    if not os.path.exists(props_path):
+        props = await model_derivative_client.fetch_all_properties(urn, view_guid)
+        with open(props_path, "w") as f: json.dump(props, f)
+    else:
+        with open(props_path, "r") as f: props = json.load(f)
 
     conn = sqlite3.connect(propdb_path)
     c = conn.cursor()
@@ -102,3 +122,4 @@ async def create_property_database(urn: str, propdb_path: str, access_token: str
         c.execute(f"INSERT INTO properties VALUES ({', '.join(['?' for _ in insert_values])})", insert_values)
     conn.commit()
     conn.close()
+    return SQLDatabase.from_uri(f"sqlite:///{propdb_path}")
