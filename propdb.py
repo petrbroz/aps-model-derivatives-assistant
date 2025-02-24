@@ -107,7 +107,7 @@ async def setup(urn: str, access_token: str, cache_urn_dir: str) -> SQLDatabase:
 
     conn = sqlite3.connect(propdb_path)
     c = conn.cursor()
-    c.execute(f"CREATE TABLE properties (object_id NUMBER, name TEXT, external_id TEXT, {", ".join([f'{column_name} {column_type}' for (column_name, column_type, _, _, _) in PROPERTIES])})")
+    c.execute(f"CREATE TABLE properties (object_id INTEGER, name TEXT, external_id TEXT, {", ".join([f'{column_name} {column_type}' for (column_name, column_type, _, _, _) in PROPERTIES])})")
     for row in props:
         object_id = row["objectid"]
         name = row["name"]
