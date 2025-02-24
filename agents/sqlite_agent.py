@@ -1,26 +1,20 @@
 import os
 from datetime import datetime
-from langchain_community.utilities import SQLDatabase
 from langchain_community.agent_toolkits import SQLDatabaseToolkit
+from langchain_community.utilities import SQLDatabase
+from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.tools import BaseTool
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
 
-_llm = ChatOpenAI(model="gpt-4o")
+with open(os.path.join(os.path.dirname(__file__), "SYSTEM_PROMPTS.md")) as f:
+    SYSTEM_PROMPTS = f.read().replace("{", "{{").replace("}", "}}")
 
-def _load_content(relative_path: str) -> str:
-    with open(os.path.join(os.path.dirname(__file__), relative_path)) as f:
-        return f.read()
-
-class SqliteAgent:
-    def __init__(self, db: SQLDatabase, cache_urn_dir: str):
-        sql_toolkit = SQLDatabaseToolkit(db=db, llm=_llm)
-        system_prompts = [
-            _load_content("SYSTEM_PROMPTS.md").replace("{", "{{").replace("}", "}}"),
-        ]
-        prompt_template = ChatPromptTemplate.from_messages([("system", system_prompts), ("placeholder", "{messages}")])
-        self._agent = create_react_agent(_llm, sql_toolkit.get_tools(), prompt=prompt_template, checkpointer=MemorySaver())
+class Agent:
+    def __init__(self, llm: BaseChatModel, prompt_template: ChatPromptTemplate, tools: list[BaseTool], cache_urn_dir: str):
+        self._agent = create_react_agent(llm, tools, prompt=prompt_template, checkpointer=MemorySaver())
         self._config = {"configurable": {"thread_id": os.path.basename(cache_urn_dir)}}
         self._logs_path = os.path.join(cache_urn_dir, "logs.txt")
 
@@ -31,7 +25,7 @@ class SqliteAgent:
     async def prompt(self, prompt: str) -> list[str]:
         self._log(f"User: {prompt}")
         responses = []
-        async for step in self._agent.astream({"messages": [("human", prompt)]}, self._config, stream_mode="updates"):
+        async for step in self._agent.astream({"messages": [("human", prompt)]}, config=self._config, stream_mode="updates"):
             if "agent" in step:
                 for message in step["agent"]["messages"]:
                     self._log(message.pretty_repr())
@@ -41,3 +35,9 @@ class SqliteAgent:
                 for message in step["tools"]["messages"]:
                     self._log(message.pretty_repr())
         return responses
+
+async def create_sqlite_agent(db: SQLDatabase, cache_urn_dir: str):
+    llm = ChatOpenAI(model="gpt-4o")
+    sql_toolkit = SQLDatabaseToolkit(db=db, llm=llm)
+    prompt_template = ChatPromptTemplate.from_messages([("system", SYSTEM_PROMPTS), ("placeholder", "{messages}")])
+    return Agent(llm, prompt_template, sql_toolkit.get_tools(), cache_urn_dir)

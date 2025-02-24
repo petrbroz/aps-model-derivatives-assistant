@@ -1,1 +1,1 @@
-from .sqlite_agent import SqliteAgent
+from .sqlite_agent import create_sqlite_agent, Agent
